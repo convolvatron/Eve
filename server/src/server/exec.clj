@@ -53,8 +53,8 @@
   (let [nested (print-registers* r (or max-indent 2))]
     (str (:register nested) (:nests nested))))
 
-;; these register indirections could be resolved at build time? yeah, kinda
-;; no longer support the implicit zero register
+
+(defn shallow-copy [r] (aclone ^objects r))
 
 
 (defn rget [r ref]
@@ -96,27 +96,13 @@
 
 
 
-(defn delta-t [c]
-  (let [state (atom {})]
-    [(fn [r]
-       (let [tuple (subvec (vec r) 1)]
-         (condp = (rget r op-register)
-           'insert (swap! state update-in [tuple] (fn [x]
-                                                    (if x
-                                                      [(x 0) (+ (x 1) 1)]
-                                                      [tuple 1])))
-
-           'remove (swap! state update-in [tuple] (fn [x] (if (= (x 1) 1) nil
-                                                              [(x 0) (- (x 1) 1)])))
-           ())
-         (c r)))
-
-     (fn [c2 op]
-       (doseq [i @state] (c2 (object-array (cons op (i 0))))))]))
-
-
-(defn donot [d terms build c]
-  (let [count (atom 0)
+(defn not [d terms build c]
+  (let [evaluations (atom {})
+        get-record (fn [r] (if-let [(evaluations r)]
+                                   ((fn [r] (swap! m assoc k r) r)
+                                    (atom #{}))))
+        
+        count (atom 0)
         on (atom false)
         zig (atom false)
         tail  (fn [r]
@@ -131,8 +117,8 @@
                              (@zig c 'remove)
                              (swap! on not))
                            (c r))
-                  'close (c r)))
-        delta (delta-t (build (second terms) tail))]
+                  'close (c r))
+        head (build (second terms) tail))]
     (reset! zig (delta 1))
     (delta 0)))
 
@@ -479,7 +465,7 @@
   (let [[scan oid dest key] terms
         opened (atom ())
         scan (fn [r]
-               (let [dr (object-array (vec r))
+               (let [dr (shallow-copy r)
                      handle (d 'insert oid (rget r key) (rget r qid-register)
                                (fn [t op qid]
                                  (rset dr op-register op)
@@ -524,6 +510,7 @@
                   '=         (simple doequal)
                   'sum       sum
                   'sort      dosort
+                  'supernot  supernot
                   'not       donot
 
                   'scan      doscan
