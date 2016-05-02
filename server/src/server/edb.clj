@@ -50,16 +50,29 @@
   (swap! (listeners view) conj [c id])
   (fn [] (swap! (listeners view) disj [c id])))
 
+;; xxx - yuge performance suck
+
+(defn fulltuple-from-local [i]
+  (object-array [(aget i 0)
+                 (aget i 1)
+                 (aget i 2)
+                 0
+                 (aget i 3)
+                 (aget i 4)]))
+
 (defn insert [view eav id c]
   (let [t (now)
         tuple (object-array (vector (aget eav 0)
                                     (aget eav 1)
                                     (aget eav 2)
                                     t
-                                    (user view)))]
+                                    (user view)))
+        r (fulltuple-from-local tuple)]
+    
+    (println "insert" (map str tuple))
     (swap! (tuples view) conj tuple)
     (doseq [i @(listeners view)]
-      ((i 0) 'insert tuple (i 1)))
+      ((i 0) 'insert r (i 1)))
     (c t)))
 
 (defn flush-bag [view id]
@@ -69,7 +82,8 @@
 
 (defn full-scan [view id c]
   (doseq [i @(tuples view)]
-    (c 'insert i id))
+    (c 'insert (fulltuple-from-local i)
+       id))
   (add-listener view id c))
 
 (defn open-new-view [view bag-id] )
